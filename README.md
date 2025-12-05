@@ -14,6 +14,30 @@ and controlling PTZ cameras in UniFi Protect.
 - 🚀 **CLI Mode Available** - Scriptable commands for automation
 - ✅ **Well-tested** - Comprehensive unit test coverage
 
+## Installation
+
+### Using Homebrew (macOS/Linux)
+
+```bash
+brew install methridge/tap/protect
+```
+
+### From Release
+
+Download the latest release from the
+[releases page](https://github.com/methridge/protect/releases) and extract it to
+your PATH.
+
+### From Source
+
+```bash
+git clone https://github.com/methridge/protect.git
+cd protect
+task build
+```
+
+The binary will be available in `bin/protect`.
+
 ## Quick Start
 
 ### 1. Get an API Token
@@ -22,44 +46,42 @@ and controlling PTZ cameras in UniFi Protect.
 2. Navigate to **Settings → Control Plane → Integrations → Your API Keys**
 3. Generate an API token and copy it
 
-### 2. Setup
+### 2. Configure
+
+Create and edit `~/.config/protect/config.yaml`:
 
 ```bash
-# Clone and build
-git clone https://github.com/methridge/protect.git
-cd protect
-task build
-# or: go build -o bin/protect .
+# Create config directory
+mkdir -p ~/.config/protect
 
 # Create config file
-mkdir -p ~/.config/protect
-cp config.yaml.example ~/.config/protect/config.yaml
-```
-
-### 3. Configure
-
-Edit `~/.config/protect/config.yaml`:
-
-```yaml
+cat > ~/.config/protect/config.yaml << EOF
 protect_url: https://192.168.1.100 # Your UniFi Protect URL
 api_token: your-api-token-here # Your API token
 log_level: none # Optional: none, debug, info, warn, error
+EOF
 ```
 
-### 4. Run
+### 3. Run
 
 ```bash
-# Launch the TUI
-./bin/protect
+# Show help (default behavior)
+protect
 
-# Or use CLI commands for scripting
-./bin/protect viewport list
-./bin/protect camera goto "Front Door" -- -1
+# Launch the TUI
+protect --tui
+# or
+protect -i
+
+# Use CLI with flags for scripting
+protect --list viewports
+protect --port VP-Office --view Driveway
+protect --camera "Front Door" --preset -1
 ```
 
 ## Using the TUI
 
-When you run `protect` without arguments, an interactive menu appears:
+When you run `protect --tui` (or `protect -i`), an interactive menu appears:
 
 ```text
 UniFi Protect Control
@@ -94,30 +116,6 @@ Select an option:
    - **Home (-1)** - Return to home position
    - **Preset 0-9** - Move to saved preset positions
 4. See confirmation message
-
-## Installation
-
-### Using Homebrew (macOS/Linux)
-
-```bash
-brew install methridge/tap/protect
-```
-
-### From Release
-
-Download the latest release from the
-[releases page](https://github.com/methridge/protect/releases) and extract it to
-your PATH.
-
-### From Source
-
-```bash
-git clone https://github.com/methridge/protect.git
-cd protect
-task build
-```
-
-The binary will be available in `bin/protect`.
 
 ## Configuration
 
@@ -174,7 +172,7 @@ protect --url https://protect.example.com --token your-api-token --log-level deb
 
 The TUI is the easiest way to interact with UniFi Protect:
 
-1. **Launch:** Run `protect` from terminal
+1. **Launch:** Run `protect --tui` or `protect -i` from terminal
 2. **Navigate:** Use arrow keys or `j`/`k` to browse
 3. **Select:** Press `Enter` on any viewport, camera, or liveview
 4. **Quick actions:**
@@ -187,48 +185,78 @@ The TUI is the easiest way to interact with UniFi Protect:
 For automation and integration:
 
 ```bash
-# Morning routine: Switch to driveway view
-protect viewport switch Tower Driveway
+# Morning routine: Switch to driveway view (flag-based)
+protect --port Tower --view Driveway
 
 # Security patrol: Cycle through camera presets
 for i in 1 2 3; do
-  protect camera goto "Front Door" $i
+  protect --camera "Front Door" --preset $i
   sleep 10
 done
 
 # Integration with cron
 # Switch to "All Cameras" at 10 PM
-0 22 * * * /usr/local/bin/protect viewport switch Tower "All Cameras"
+0 22 * * * /usr/local/bin/protect --port Tower --view "All Cameras"
 ```
 
 ## CLI Reference
 
-All TUI features are available via CLI for scripting and automation.
+All TUI features are available via CLI for scripting and automation using flags.
 
 ### Global Flags
 
 ```bash
--h, --help              Show help
+-h, --help              Show help (default when no flags given)
+-i, --tui               Launch interactive TUI
 -l, --log-level string  Log level (none, debug, info, warn, error)
 -t, --token string      API token
 -u, --url string        UniFi Protect URL
 ```
 
-### Commands
+### Flag-Based Usage
+
+Use flags directly with the `protect` command for quick operations:
 
 ```bash
-# Viewports
-protect viewport list                           # List all viewports
-protect viewport switch <viewport> <liveview>   # Switch viewport to liveview
+# Interactive mode
+protect --tui                               # Launch interactive TUI
+protect -i                                  # Short form
 
-# Liveviews
-protect liveview list                           # List all liveviews
-protect liveview switch <viewport> <liveview>   # Alternative switch syntax
+# List operations
+protect --list viewports                    # List all viewports
+protect --list liveviews                    # List all liveviews
+protect --list cameras                      # List all PTZ cameras
+protect --list viewports --show-ids         # Include IDs in listing
 
-# PTZ Cameras
-protect camera list                             # List all PTZ cameras
-protect camera goto <camera> <preset>           # Move camera to preset (-1 to 9)
-protect camera goto "Front Door" -- -1          # Home position (use -- before -1)
+# Switch viewport to liveview
+protect --port VP-Office --view Driveway    # Switch VP-Office to Driveway view
+protect -p Tower -v "All Cameras"           # Short form with quotes for spaces
+
+# Control PTZ cameras
+protect --camera "Front Door" --preset -1   # Move to home position
+protect -c Driveway -P 3                    # Move to preset 3
+protect --camera Tower --preset 0           # Move to preset 0
+```
+
+### Usage Examples
+
+```bash
+# Launch TUI
+protect --tui
+protect -i
+
+# Quick viewport switch
+protect --port=VP-Office --view=Driveway
+
+# List viewports with IDs
+protect --list viewports --show-ids
+
+# Move camera to preset
+protect --camera "Front Door" --preset 5
+
+# Using short flags
+protect -p Tower -v "All Cameras"
+protect -c Driveway -P 3
 ```
 
 ## Troubleshooting

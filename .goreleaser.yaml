@@ -48,17 +48,20 @@ changelog:
       - "^chore:"
       - "typo"
 
-brews:
+homebrew_casks:
   - name: protect
-    homepage: https://github.com/methridge/protect
+    homepage: "https://github.com/methridge/protect"
     description: "UniFi Protect View Switcher CLI"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/protect"]
+          end
     repository:
       owner: methridge
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     commit_author:
       name: goreleaserbot
-      email: bot@goreleaser.com
-    directory: Formula
-    install: |
-      bin.install "protect"
+      email: bot@methridge.com

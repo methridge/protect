@@ -65,6 +65,9 @@ EOF
 ### 3. Run
 
 ```bash
+# Show version
+protect --version
+
 # Show help (default behavior)
 protect
 
@@ -73,10 +76,14 @@ protect --tui
 # or
 protect -i
 
-# Use CLI with flags for scripting
-protect --list viewports
-protect --port VP-Office --view Driveway
-protect --camera "Front Door" --preset -1
+# Use CLI with single-argument flags (ideal for automation platforms)
+protect --list=viewports
+protect --switch=VP-Office:Driveway
+protect --ptz="Front Door:-1"
+
+# Traditional multi-flag format also supported
+protect --port=VP-Office --view=Driveway
+protect --camera="Front Door" --preset=-1
 ```
 
 ## Using the TUI
@@ -182,26 +189,39 @@ The TUI is the easiest way to interact with UniFi Protect:
 
 ### Scripting with CLI
 
-For automation and integration:
+For automation and integration, especially with platforms that support only one
+argument:
 
 ```bash
-# Morning routine: Switch to driveway view (flag-based)
-protect --port Tower --view Driveway
+# Single-argument commands (ideal for automation platforms)
+protect --switch=Tower:Driveway
+protect --ptz="Front Door:5"
+protect --list=cameras
 
 # Security patrol: Cycle through camera presets
 for i in 1 2 3; do
-  protect --camera "Front Door" --preset $i
+  protect --ptz="Front Door:$i"
   sleep 10
 done
 
-# Integration with cron
+# Integration with cron - single argument format
 # Switch to "All Cameras" at 10 PM
-0 22 * * * /usr/local/bin/protect --port Tower --view "All Cameras"
+0 22 * * * /usr/local/bin/protect --switch="Tower:All Cameras"
+
+# Traditional multi-flag format also works
+protect --port=Tower --view=Driveway
+protect --camera="Front Door" --preset=5
 ```
 
 ## CLI Reference
 
 All TUI features are available via CLI for scripting and automation using flags.
+
+**Important:** For reliable script operation, use the equal sign format for all
+flags with values (e.g., `--list=viewports` instead of `--list viewports`).
+
+**For Automation Platforms:** If your automation platform can only pass one
+argument at a time, use the single-argument commands: `--switch` and `--ptz`.
 
 ### Global Flags
 
@@ -211,52 +231,87 @@ All TUI features are available via CLI for scripting and automation using flags.
 -l, --log-level string  Log level (none, debug, info, warn, error)
 -t, --token string      API token
 -u, --url string        UniFi Protect URL
+-V, --version           Show version information
 ```
 
-### Flag-Based Usage
+### Single-Argument Commands (Ideal for Automation)
 
-Use flags directly with the `protect` command for quick operations:
+These commands combine multiple parameters into a single argument, perfect for
+automation platforms that can only pass one argument at a time:
+
+```bash
+# Switch viewport to liveview (format: viewport:liveview)
+protect --switch=VP-Office:Driveway
+protect --switch="Tower:All Cameras"         # Use quotes for names with spaces
+protect -s Tower:Driveway                    # Short form
+
+# Move PTZ camera to preset (format: camera:preset)
+protect --ptz=Tower:-1                       # Move to home position
+protect --ptz="Front Door:5"                 # Move to preset 5
+protect --ptz=Driveway:0                     # Move to preset 0
+
+# List operations (single argument)
+protect --list=viewports                     # List all viewports
+protect --list=liveviews                     # List all liveviews
+protect --list=cameras                       # List all PTZ cameras
+protect --list=viewports --show-ids          # Include IDs in listing
+```
+
+### Multi-Flag Commands (Traditional Format)
+
+For systems that support multiple arguments, you can also use the traditional
+format:
 
 ```bash
 # Interactive mode
-protect --tui                               # Launch interactive TUI
-protect -i                                  # Short form
+protect --tui                                # Launch interactive TUI
+protect -i                                   # Short form
 
 # List operations
-protect --list viewports                    # List all viewports
-protect --list liveviews                    # List all liveviews
-protect --list cameras                      # List all PTZ cameras
-protect --list viewports --show-ids         # Include IDs in listing
+protect --list=viewports                     # List all viewports
+protect --list=liveviews                     # List all liveviews
+protect --list=cameras                       # List all PTZ cameras
+protect --list=viewports --show-ids          # Include IDs in listing
 
 # Switch viewport to liveview
-protect --port VP-Office --view Driveway    # Switch VP-Office to Driveway view
-protect -p Tower -v "All Cameras"           # Short form with quotes for spaces
+protect --port=VP-Office --view=Driveway     # Switch VP-Office to Driveway view
+protect --port=Tower --view="All Cameras"    # Use quotes for names with spaces
 
 # Control PTZ cameras
-protect --camera "Front Door" --preset -1   # Move to home position
-protect -c Driveway -P 3                    # Move to preset 3
-protect --camera Tower --preset 0           # Move to preset 0
+protect --camera="Front Door" --preset=-1    # Move to home position
+protect --camera=Driveway --preset=3         # Move to preset 3
+protect --camera=Tower --preset=0            # Move to preset 0
 ```
 
 ### Usage Examples
 
 ```bash
+# Check version
+protect --version
+
+# Single-argument commands (best for automation)
+protect --switch=Tower:Driveway
+protect --ptz="Front Door:5"
+protect --list=cameras
+
 # Launch TUI
 protect --tui
 protect -i
 
-# Quick viewport switch
+# Quick viewport switch (multi-flag format)
 protect --port=VP-Office --view=Driveway
 
+# Quick viewport switch (single-argument format)
+protect --switch=VP-Office:Driveway
+
 # List viewports with IDs
-protect --list viewports --show-ids
+protect --list=viewports --show-ids
 
-# Move camera to preset
-protect --camera "Front Door" --preset 5
+# Move camera to preset (multi-flag format)
+protect --camera="Front Door" --preset=5
 
-# Using short flags
-protect -p Tower -v "All Cameras"
-protect -c Driveway -P 3
+# Move camera to preset (single-argument format)
+protect --ptz="Front Door:5"
 ```
 
 ## Troubleshooting

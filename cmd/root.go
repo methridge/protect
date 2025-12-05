@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/methridge/protect/internal/client"
@@ -12,11 +14,44 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	// Version information, set via ldflags during build
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "protect",
 	Short: "UniFi Protect View Switcher",
 	Long:  `A TUI tool for switching between different camera views and viewports in UniFi Protect.`,
+	Args:  cobra.NoArgs, // Disallow positional arguments
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Check for version flag
+		showVersion, _ := cmd.Flags().GetBool("version")
+		if showVersion {
+			fmt.Printf("protect version %s\ncommit: %s\nbuilt: %s\n", version, commit, date)
+			return nil
+		}
+
+		// Initialize client for operations that need it
+		c, err := getClient()
+		if err != nil {
+			return err
+		}
+
+		// Check for combined switch flag (single argument for automation)
+		switchArg, _ := cmd.Flags().GetString("switch")
+		if switchArg != "" {
+			return handleSwitchCommand(c, switchArg)
+		}
+
+		// Check for combined PTZ flag (single argument for automation)
+		ptzArg, _ := cmd.Flags().GetString("ptz")
+		if ptzArg != "" {
+			return handlePTZCommand(c, ptzArg)
+		}
+
 		// Check for flag-based operations
 		listMode, _ := cmd.Flags().GetString("list")
 		viewport, _ := cmd.Flags().GetString("port")
@@ -25,11 +60,6 @@ var rootCmd = &cobra.Command{
 		preset, _ := cmd.Flags().GetInt("preset")
 		showIDs, _ := cmd.Flags().GetBool("show-ids")
 		launchTUI, _ := cmd.Flags().GetBool("tui")
-
-		c, err := getClient()
-		if err != nil {
-			return err
-		}
 
 		// Handle TUI launch
 		if launchTUI {
@@ -97,18 +127,33 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("url", "u", "", "UniFi Protect URL")
-	rootCmd.PersistentFlags().StringP("token", "t", "", "API token for authentication")
-	rootCmd.PersistentFlags().StringP("log-level", "l", "none", "Log level (none, debug, info, warn, error)")
+	// Persistent flags (use equal sign format: --flag=value)
+	rootCmd.PersistentFlags().StringP("url", "u", "", "UniFi Protect URL (use --url=<value>)")
+	rootCmd.PersistentFlags().StringP("token", "t", "", "API token for authentication (use --token=<value>)")
+	rootCmd.PersistentFlags().StringP("log-level", "l", "none", "Log level (use --log-level=<value>)")
 
-	// Flag-based options
+	// Flag-based options (use equal sign format: --flag=value)
 	rootCmd.Flags().BoolP("tui", "i", false, "Launch interactive TUI")
-	rootCmd.Flags().StringP("port", "p", "", "Viewport name or ID (use with --view)")
-	rootCmd.Flags().StringP("view", "v", "", "Liveview/camera name or ID (use with --port)")
-	rootCmd.Flags().StringP("camera", "c", "", "Camera name or ID for PTZ operations (use with --preset)")
-	rootCmd.Flags().IntP("preset", "P", -2, "PTZ preset position (-1 for home, 0-9 for presets)")
-	rootCmd.Flags().StringP("list", "L", "", "List items: 'viewports', 'liveviews', or 'cameras'")
+	rootCmd.Flags().StringP("switch", "s", "", "Switch viewport to liveview (use --switch=<viewport>:<liveview>)")
+	rootCmd.Flags().String("ptz", "", "Move PTZ camera to preset (use --ptz=<camera>:<preset>)")
+	rootCmd.Flags().StringP("port", "p", "", "Viewport name or ID (use --port=<value> with --view)")
+	rootCmd.Flags().StringP("view", "v", "", "Liveview/camera name or ID (use --view=<value> with --port)")
+	rootCmd.Flags().StringP("camera", "c", "", "Camera name or ID for PTZ operations (use --camera=<value> with --preset)")
+	rootCmd.Flags().IntP("preset", "P", -2, "PTZ preset position (use --preset=<value>, -1 for home, 0-9 for presets)")
+	rootCmd.Flags().StringP("list", "L", "", "List items (use --list=<value>: 'viewports', 'liveviews', or 'cameras')")
 	rootCmd.Flags().Bool("show-ids", false, "Show IDs when listing")
+	rootCmd.Flags().BoolP("version", "V", false, "Show version information")
+
+	// Set all string/int flags to require explicit values
+	// This makes the --flag=value format mandatory in the help text
+	rootCmd.PersistentFlags().Lookup("url").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.PersistentFlags().Lookup("token").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.Flags().Lookup("switch").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.Flags().Lookup("ptz").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.Flags().Lookup("port").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.Flags().Lookup("view").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.Flags().Lookup("camera").Annotations = map[string][]string{"required": {"true"}}
+	rootCmd.Flags().Lookup("list").Annotations = map[string][]string{"required": {"true"}}
 }
 
 func getClient() (*client.Client, error) {
@@ -329,4 +374,43 @@ func listCameras(c *client.Client, showIDs bool) error {
 	w.Flush()
 
 	return nil
+}
+
+// handleSwitchCommand processes the combined switch flag (viewport:liveview)
+func handleSwitchCommand(c *client.Client, switchArg string) error {
+	parts := strings.Split(switchArg, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid switch format: %s (expected format: <viewport>:<liveview>)", switchArg)
+	}
+
+	viewport := strings.TrimSpace(parts[0])
+	liveview := strings.TrimSpace(parts[1])
+
+	if viewport == "" || liveview == "" {
+		return fmt.Errorf("viewport and liveview cannot be empty")
+	}
+
+	return handleViewportSwitch(c, viewport, liveview)
+}
+
+// handlePTZCommand processes the combined PTZ flag (camera:preset)
+func handlePTZCommand(c *client.Client, ptzArg string) error {
+	parts := strings.Split(ptzArg, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid ptz format: %s (expected format: <camera>:<preset>)", ptzArg)
+	}
+
+	camera := strings.TrimSpace(parts[0])
+	presetStr := strings.TrimSpace(parts[1])
+
+	if camera == "" || presetStr == "" {
+		return fmt.Errorf("camera and preset cannot be empty")
+	}
+
+	preset, err := strconv.Atoi(presetStr)
+	if err != nil {
+		return fmt.Errorf("invalid preset value: %s (must be a number between -1 and 9)", presetStr)
+	}
+
+	return handleCameraOperation(c, camera, preset)
 }

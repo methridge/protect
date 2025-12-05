@@ -55,9 +55,6 @@ homebrew_casks:
     repository:
       owner: methridge
       name: homebrew-tap
-      branch: release/protect
-      pull_request:
-        enabled: true
     hooks:
       post:
         install: |

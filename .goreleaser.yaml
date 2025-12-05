@@ -24,20 +24,20 @@ builds:
     main: .
 
 archives:
-  - format: tar.gz
+  - formats: ["tar.gz"]
     name_template: >-
       {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{-
       else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm
       }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: ["zip"]
 
 checksum:
   name_template: "checksums.txt"
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -48,10 +48,19 @@ changelog:
       - "^chore:"
       - "typo"
 
-brews:
+homebrew_casks:
   - name: protect
     homepage: https://github.com/methridge/protect
     description: "UniFi Protect View Switcher CLI"
     repository:
       owner: methridge
       name: homebrew-tap
+      branch: release/protect
+      pull_request:
+        enabled: true
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/protect"]
+          end

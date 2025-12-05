@@ -55,6 +55,7 @@ homebrew_casks:
     repository:
       owner: methridge
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     hooks:
       post:
         install: |

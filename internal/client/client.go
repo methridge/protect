@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/methridge/protect/internal/logger"
@@ -97,14 +98,15 @@ type PTZCamera struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
 	ModelKey         string `json:"modelKey"`
+	Type             string `json:"type"`
 	ActivePatrolSlot *int   `json:"activePatrolSlot"`
 }
 
-// HasPTZ returns true if the camera has PTZ capabilities
+// HasPTZ reports whether the camera model supports PTZ. The integration API
+// has no capability flag, so this relies on the model name in the undocumented
+// "type" field (e.g. "UVC G6 PTZ"). If "type" is missing, the camera is kept.
 func (p *PTZCamera) HasPTZ() bool {
-	// If activePatrolSlot field exists (even if null), the camera has PTZ
-	// PTZ cameras will have this field, non-PTZ cameras won't
-	return p.ActivePatrolSlot != nil || p.ModelKey == "camera"
+	return p.Type == "" || strings.Contains(p.Type, "PTZ")
 }
 
 // ListViewports retrieves all available viewports (viewers)
@@ -170,7 +172,7 @@ func (c *Client) SwitchCamera(viewportID, liveviewID string) error {
 	return c.SwitchViewport(viewportID, liveviewID)
 }
 
-// ListPTZCameras retrieves all available PTZ cameras
+// ListPTZCameras retrieves all cameras that support PTZ (see HasPTZ)
 func (c *Client) ListPTZCameras() ([]PTZCamera, error) {
 	log := logger.Get()
 	log.Debug("Fetching PTZ cameras")
@@ -185,7 +187,14 @@ func (c *Client) ListPTZCameras() ([]PTZCamera, error) {
 		return nil, fmt.Errorf("failed to unmarshal PTZ cameras: %w", err)
 	}
 
-	return cameras, nil
+	ptzCameras := []PTZCamera{}
+	for _, cam := range cameras {
+		if cam.HasPTZ() {
+			ptzCameras = append(ptzCameras, cam)
+		}
+	}
+
+	return ptzCameras, nil
 }
 
 // MovePTZToPreset moves a PTZ camera to a specific preset position

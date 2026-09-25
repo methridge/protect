@@ -39,10 +39,7 @@ func Load() (*Config, error) {
 
 	// Try OS-specific config directory (macOS: ~/Library/Application Support)
 	if configDir, err := os.UserConfigDir(); err == nil {
-		appConfigDir := filepath.Join(configDir, "protect")
-		viper.AddConfigPath(appConfigDir)
-		// Create config directory if it doesn't exist
-		os.MkdirAll(appConfigDir, 0755)
+		viper.AddConfigPath(filepath.Join(configDir, "protect"))
 	}
 
 	// Set defaults

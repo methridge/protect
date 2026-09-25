@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+# https://taskfile.dev
+#
+# Project-specific tasks (repo-owned; `task sync` never touches this file).
+
+version: "3"
+
+vars:
+  BINARY_NAME: '{{.BINARY_NAME | default "bin/protect"}}'
+  # Literal, not `default`: shells often export a C-linker LDFLAGS, which is
+  # not valid for `go build -ldflags`.
+  LDFLAGS: "-s -w"
+
+tasks:
+  test:
+    desc: Run all tests
+    preconditions:
+      - sh: 'command -v go >/dev/null 2>&1'
+        msg: "go toolchain required: https://go.dev/dl/"
+    cmds:
+      - go test -v ./...
+
+  test-coverage:
+    desc: Run tests with coverage
+    preconditions:
+      - sh: 'command -v go >/dev/null 2>&1'
+        msg: "go toolchain required: https://go.dev/dl/"
+    cmds:
+      - go test -v -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+
+  lint:
+    desc: Run linters
+    preconditions:
+      - sh: 'command -v go >/dev/null 2>&1'
+        msg: "go toolchain required: https://go.dev/dl/"
+    cmds:
+      - go fmt ./...
+      - go vet ./...
+
+  release-snapshot:
+    desc: Create a snapshot release with goreleaser
+    preconditions:
+      - sh: 'command -v goreleaser >/dev/null 2>&1'
+        msg: "goreleaser required: https://goreleaser.com/install/"
+    cmds:
+      - goreleaser release --snapshot --clean
+
+  release:
+    desc: Create a release with goreleaser
+    preconditions:
+      - sh: 'command -v goreleaser >/dev/null 2>&1'
+        msg: "goreleaser required: https://goreleaser.com/install/"
+    cmds:
+      - goreleaser release --clean

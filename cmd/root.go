@@ -85,6 +85,11 @@ var rootCmd = &cobra.Command{
 		return cmd.Help()
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// --version needs no configuration
+		if showVersion, _ := cmd.Flags().GetBool("version"); showVersion {
+			return nil
+		}
+
 		// Load configuration
 		cfg, err := config.Load()
 		if err != nil {
@@ -175,40 +180,57 @@ func handleListOperation(c *client.Client, listType string, showIDs bool) error 
 }
 
 func handleViewportSwitch(c *client.Client, viewportIdentifier, liveviewIdentifier string) error {
-	log := logger.Get()
+	viewports, liveviews, err := listViewportsAndLiveviews(c)
+	if err != nil {
+		return err
+	}
 
-	// Find viewport by name or ID
+	return switchViewport(c, viewports, liveviews, viewportIdentifier, liveviewIdentifier)
+}
+
+func listViewportsAndLiveviews(c *client.Client) ([]client.Viewport, []client.Liveview, error) {
 	viewports, err := c.ListViewports()
 	if err != nil {
-		return fmt.Errorf("failed to list viewports: %w", err)
+		return nil, nil, fmt.Errorf("failed to list viewports: %w", err)
 	}
 
-	var viewportID string
+	liveviews, err := c.ListCameras()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list liveviews: %w", err)
+	}
+
+	return viewports, liveviews, nil
+}
+
+// findViewportID returns the ID of the viewport matching a name or ID, or ""
+func findViewportID(viewports []client.Viewport, identifier string) string {
 	for _, vp := range viewports {
-		if vp.ID == viewportIdentifier || vp.Name == viewportIdentifier {
-			viewportID = vp.ID
-			break
+		if vp.ID == identifier || vp.Name == identifier {
+			return vp.ID
 		}
 	}
+	return ""
+}
 
+// findLiveviewID returns the ID of the liveview matching a name or ID, or ""
+func findLiveviewID(liveviews []client.Liveview, identifier string) string {
+	for _, lv := range liveviews {
+		if lv.ID == identifier || lv.Name == identifier {
+			return lv.ID
+		}
+	}
+	return ""
+}
+
+func switchViewport(c *client.Client, viewports []client.Viewport, liveviews []client.Liveview, viewportIdentifier, liveviewIdentifier string) error {
+	log := logger.Get()
+
+	viewportID := findViewportID(viewports, viewportIdentifier)
 	if viewportID == "" {
 		return fmt.Errorf("viewport not found: %s", viewportIdentifier)
 	}
 
-	// Find liveview by name or ID
-	liveviews, err := c.ListCameras()
-	if err != nil {
-		return fmt.Errorf("failed to list liveviews: %w", err)
-	}
-
-	var liveviewID string
-	for _, lv := range liveviews {
-		if lv.ID == liveviewIdentifier || lv.Name == liveviewIdentifier {
-			liveviewID = lv.ID
-			break
-		}
-	}
-
+	liveviewID := findLiveviewID(liveviews, liveviewIdentifier)
 	if liveviewID == "" {
 		return fmt.Errorf("liveview not found: %s", liveviewIdentifier)
 	}
@@ -376,32 +398,68 @@ func listCameras(c *client.Client, showIDs bool) error {
 	return nil
 }
 
-// handleSwitchCommand processes the combined switch flag (viewport:liveview)
+// handleSwitchCommand processes the combined switch flag (viewport:liveview).
+// Names may contain colons: every colon is tried as the separator, and the
+// split where both sides match an existing viewport and liveview is used.
 func handleSwitchCommand(c *client.Client, switchArg string) error {
-	parts := strings.Split(switchArg, ":")
-	if len(parts) != 2 {
+	if !strings.Contains(switchArg, ":") {
 		return fmt.Errorf("invalid switch format: %s (expected format: <viewport>:<liveview>)", switchArg)
 	}
 
-	viewport := strings.TrimSpace(parts[0])
-	liveview := strings.TrimSpace(parts[1])
+	type split struct{ viewport, liveview string }
+	var splits []split
+	for i, ch := range switchArg {
+		if ch != ':' {
+			continue
+		}
+		viewport := strings.TrimSpace(switchArg[:i])
+		liveview := strings.TrimSpace(switchArg[i+1:])
+		if viewport != "" && liveview != "" {
+			splits = append(splits, split{viewport, liveview})
+		}
+	}
 
-	if viewport == "" || liveview == "" {
+	if len(splits) == 0 {
 		return fmt.Errorf("viewport and liveview cannot be empty")
 	}
 
-	return handleViewportSwitch(c, viewport, liveview)
+	viewports, liveviews, err := listViewportsAndLiveviews(c)
+	if err != nil {
+		return err
+	}
+
+	// With a single possible split, let switchViewport report which side is unknown
+	if len(splits) == 1 {
+		return switchViewport(c, viewports, liveviews, splits[0].viewport, splits[0].liveview)
+	}
+
+	var matches []split
+	for _, s := range splits {
+		if findViewportID(viewports, s.viewport) != "" && findLiveviewID(liveviews, s.liveview) != "" {
+			matches = append(matches, s)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return fmt.Errorf("no viewport and liveview match: %s", switchArg)
+	case 1:
+		return switchViewport(c, viewports, liveviews, matches[0].viewport, matches[0].liveview)
+	default:
+		return fmt.Errorf("ambiguous switch argument: %s (matches more than one viewport:liveview pair; use --port and --view)", switchArg)
+	}
 }
 
-// handlePTZCommand processes the combined PTZ flag (camera:preset)
+// handlePTZCommand processes the combined PTZ flag (camera:preset).
+// The preset is a number, so the last colon separates it from the camera name.
 func handlePTZCommand(c *client.Client, ptzArg string) error {
-	parts := strings.Split(ptzArg, ":")
-	if len(parts) != 2 {
+	sep := strings.LastIndex(ptzArg, ":")
+	if sep == -1 {
 		return fmt.Errorf("invalid ptz format: %s (expected format: <camera>:<preset>)", ptzArg)
 	}
 
-	camera := strings.TrimSpace(parts[0])
-	presetStr := strings.TrimSpace(parts[1])
+	camera := strings.TrimSpace(ptzArg[:sep])
+	presetStr := strings.TrimSpace(ptzArg[sep+1:])
 
 	if camera == "" || presetStr == "" {
 		return fmt.Errorf("camera and preset cannot be empty")

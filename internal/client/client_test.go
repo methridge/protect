@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -167,9 +168,10 @@ func TestListPTZCameras(t *testing.T) {
 
 		patrolSlot := 0
 		cameras := []PTZCamera{
-			{ID: "cam1", Name: "PTZ Camera 1", ModelKey: "camera", ActivePatrolSlot: &patrolSlot},
-			{ID: "cam2", Name: "Fixed Camera", ModelKey: "camera", ActivePatrolSlot: nil},
-			{ID: "cam3", Name: "PTZ Camera 2", ModelKey: "camera", ActivePatrolSlot: nil},
+			{ID: "cam1", Name: "PTZ Camera 1", ModelKey: "camera", Type: "UVC G6 PTZ", ActivePatrolSlot: &patrolSlot},
+			{ID: "cam2", Name: "Fixed Camera", ModelKey: "camera", Type: "UVC G5 Dome", ActivePatrolSlot: nil},
+			{ID: "cam3", Name: "PTZ Camera 2", ModelKey: "camera", Type: "UVC G5 PTZ", ActivePatrolSlot: nil},
+			{ID: "cam4", Name: "Unknown Model", ModelKey: "camera", ActivePatrolSlot: nil},
 		}
 
 		json.NewEncoder(w).Encode(cameras)
@@ -183,17 +185,13 @@ func TestListPTZCameras(t *testing.T) {
 		t.Fatalf("ListPTZCameras() error = %v", err)
 	}
 
-	// Should return all cameras
-	if len(cameras) != 3 {
-		t.Errorf("Expected 3 cameras, got %d", len(cameras))
+	// Non-PTZ models are filtered out; cameras without a type are kept
+	var ids []string
+	for _, cam := range cameras {
+		ids = append(ids, cam.ID)
 	}
-
-	if cameras[0].ID != "cam1" || cameras[0].Name != "PTZ Camera 1" {
-		t.Errorf("Unexpected camera data: %+v", cameras[0])
-	}
-
-	if cameras[2].ID != "cam3" || cameras[2].Name != "PTZ Camera 2" {
-		t.Errorf("Unexpected camera data: %+v", cameras[2])
+	if got, want := strings.Join(ids, ","), "cam1,cam3,cam4"; got != want {
+		t.Errorf("Expected cameras %s, got %s", want, got)
 	}
 }
 

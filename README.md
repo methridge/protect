@@ -237,7 +237,11 @@ argument at a time, use the single-argument commands: `--switch` and `--ptz`.
 ### Single-Argument Commands (Ideal for Automation)
 
 These commands combine multiple parameters into a single argument, perfect for
-automation platforms that can only pass one argument at a time:
+automation platforms that can only pass one argument at a time.
+
+Names may contain colons. For `--ptz`, the last colon separates the preset. For
+`--switch`, the split that matches an existing viewport and liveview is used; if
+more than one split matches, use `--port` and `--view` instead.
 
 ```bash
 # Switch viewport to liveview (format: viewport:liveview)
@@ -338,7 +342,7 @@ protect --ptz="Front Door:5"
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 - Task (taskfile.dev)
 
 ### Building and Testing
@@ -355,14 +359,15 @@ task lint            # Run linter
 
 ```text
 protect/
-├── cmd/                    # Command definitions (root, viewport, liveview, camera)
+├── cmd/                    # Root command and flag handling (Cobra)
 ├── internal/
 │   ├── client/            # UniFi Protect API client
 │   ├── config/            # Configuration management
 │   ├── logger/            # Logging utilities
 │   └── tui/               # Terminal UI (Bubble Tea)
 ├── main.go                # Application entry point
-├── Taskfile.yaml          # Task automation
+├── Taskfile.yaml          # Task automation (methridge/taskfiles standard)
+├── .taskfiles/            # Shared (vendored) and project-specific tasks
 └── .goreleaser.yaml       # Release configuration
 ```
 
